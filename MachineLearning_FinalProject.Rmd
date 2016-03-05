@@ -1,0 +1,91 @@
+---
+output: html_document
+---
+#Practical Machine Learning Course Project
+##Background
+
+####Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+##Data
+
+####The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+####The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+####The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+##Goal
+
+####The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+
+###Loading and Cleaning The Data Sets
+```{r load_data}
+library(caret)
+library(randomForest)
+library(e1071)
+testdata<-read.csv(file = "pml-testing.csv")
+traindata<-read.csv(file = "pml-training.csv")
+```
+#####Examine the data to see if it can be subsetted before processing
+```{r do_names}
+names(traindata)
+```
+#####It appears as if the first six columns have no bearing on how the exercise was done so remove them.
+```{r remove_columns}
+traindata <- traindata[, -(1:6)]
+testdata <- testdata[, -(1:6)]
+```
+
+####Partition the training dataset
+#####Create a training data set and a cross validation set from the training data
+```{r create_test_sets}
+inTrain <- createDataPartition(y=traindata$classe, p=0.6, list=F)
+traindata <- traindata[inTrain, ]
+trainvaldata <- traindata[-inTrain, ]
+dim(traindata)
+dim(trainvaldata)
+```
+
+#####After looking at the data it was observed that many columns are mostly NAs and these could affect the prediction
+#####Remove data that has more than 90% NAs as they are useless for the prediction model.
+```{r remove_columns_with_nas_more_than_90}
+getNAs<-apply(traindata,2,function(x) {sum(is.na(x))}) > 0.90
+traindata<-traindata[, which(getNAs == FALSE)]
+getNAs<-apply(trainvaldata,2,function(x) {sum(is.na(x))}) > 0.90
+
+trainvaldata<-trainvaldata[, which(getNAs == FALSE)]
+getNAs<-apply(testdata,2,function(x) {sum(is.na(x))}) > 0.90
+testdata<-testdata[, which(getNAs == FALSE)]
+```
+
+#####Remove near zero variables from all test sets
+```{r remove_zero_variables}
+zerovars <- nearZeroVar(traindata, saveMetrics=TRUE)
+traindata <- traindata[,zerovars$nzv==FALSE]
+zerovars<- nearZeroVar(trainvaldata,saveMetrics=TRUE)
+trainvaldata <- trainvaldata[,zerovars$nzv==FALSE]
+zerovars<- nearZeroVar(testdata,saveMetrics=TRUE)
+testdata <- testdata[,zerovars$nzv==FALSE]
+```
+
+###Model the data
+#####I decided to model using random forests because of its accuracy
+```{r data_rf_train}
+rf_datafit <- randomForest(classe ~. , data=traindata)
+rf_predict <- predict(rf_datafit, traindata, type = "class")
+confusionMatrix(rf_predict, traindata$classe)
+```
+
+#####Apply the model to the cross validation set
+```{r data_rf_train_validate}
+rf_predictval <- predict(rf_datafit, trainvaldata, type = "class")
+confusionMatrix(rf_predictval, trainvaldata$classe)
+```
+
+#####Apply the model to the test data set and examine the predictions
+```{r data_rf_test}
+set.seed(7465)
+rf_predtest <- predict(rf_datafit, testdata, type = "class")
+rf_predtest
+```
